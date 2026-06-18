@@ -264,22 +264,23 @@ elif page == PAGES[1]:
     st.title("📤 Загрузить результаты сканирования")
     st.markdown("Загрузите Excel-файл с результатами инвентаризации (формат: Штрих-код | Кол-во | ...)")
 
-    uploaded = st.file_uploader("Выберите файл", type=["xlsx", "xls"])
+    uploaded_files = st.file_uploader("Выберите файлы", type=["xlsx", "xls"], accept_multiple_files=True)
 
-    if uploaded:
-        with st.spinner("Парсинг файла..."):
+    if uploaded_files:
+        all_records = []
+        for f in uploaded_files:
             try:
-                records = parse_scan_file(uploaded)
+                records = parse_scan_file(f)
+                all_records.extend(records)
             except Exception as e:
-                st.error(f"Ошибка при чтении файла: {e}")
-                st.stop()
+                st.error(f"Ошибка при чтении {f.name}: {e}")
 
-        if not records:
-            st.warning("Файл не содержит данных для загрузки")
+        if not all_records:
+            st.warning("Файлы не содержат данных для загрузки")
             st.stop()
 
-        new_df = pd.DataFrame(records)
-        st.write(f"Распознано: **{new_df['cell_barcode'].nunique()}** ячеек, **{len(new_df)}** записей")
+        new_df = pd.DataFrame(all_records)
+        st.write(f"Распознано: **{new_df['cell_barcode'].nunique()}** ячеек, **{len(new_df)}** записей из {len(uploaded_files)} файлов")
         st.dataframe(new_df.head(20), use_container_width=True, hide_index=True)
 
         with st.spinner("Проверка дублей..."):
