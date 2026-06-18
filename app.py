@@ -117,7 +117,10 @@ if page == PAGES[0]:
         st.info("Нет данных сканирования")
     else:
         plan = (
-            products[["cell_barcode", "barcodes", "amount_available"]]
+            products[
+                products["cell_barcode"].isin(scanned_set) &
+                products["barcodes"].astype(str).ne("")
+            ][["cell_barcode", "barcodes", "amount_available"]]
             .rename(columns={"barcodes": "barcode"})
             .groupby(["cell_barcode", "barcode"], as_index=False)["amount_available"].sum()
         )
@@ -212,7 +215,10 @@ if page == PAGES[0]:
         st.info("Нет данных сканирования")
     else:
         plan_qty = (
-            products[["cell_barcode", "barcodes", "name", "amount_available"]]
+            products[
+                products["cell_barcode"].isin(scanned_set) &
+                products["barcodes"].astype(str).ne("")
+            ][["cell_barcode", "barcodes", "name", "amount_available"]]
             .rename(columns={"barcodes": "barcode"})
             .groupby(["cell_barcode", "barcode", "name"], as_index=False)["amount_available"].sum()
         )
