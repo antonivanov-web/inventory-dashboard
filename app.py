@@ -116,10 +116,15 @@ if page == PAGES[0]:
     if scan.empty:
         st.info("Нет данных сканирования")
     else:
-        plan = products[["cell_barcode", "barcodes", "amount_available"]].rename(
-            columns={"barcodes": "barcode"}
+        plan = (
+            products[["cell_barcode", "barcodes", "amount_available"]]
+            .rename(columns={"barcodes": "barcode"})
+            .groupby(["cell_barcode", "barcode"], as_index=False)["amount_available"].sum()
         )
-        fact = scan[scan["barcode"] != ""][["cell_barcode", "barcode", "amount_in_location"]]
+        fact = (
+            scan[scan["barcode"] != ""][["cell_barcode", "barcode", "amount_in_location"]]
+            .groupby(["cell_barcode", "barcode"], as_index=False)["amount_in_location"].sum()
+        )
 
         merged_cells = plan.merge(fact, on=["cell_barcode", "barcode"], how="outer")
         merged_cells["amount_available"] = merged_cells["amount_available"].fillna(0)
@@ -206,10 +211,15 @@ if page == PAGES[0]:
     if scan.empty:
         st.info("Нет данных сканирования")
     else:
-        plan_qty = products[["cell_barcode", "barcodes", "name", "amount_available"]].rename(
-            columns={"barcodes": "barcode"}
+        plan_qty = (
+            products[["cell_barcode", "barcodes", "name", "amount_available"]]
+            .rename(columns={"barcodes": "barcode"})
+            .groupby(["cell_barcode", "barcode", "name"], as_index=False)["amount_available"].sum()
         )
-        fact_qty = scan[scan["barcode"] != ""][["cell_barcode", "barcode", "amount_in_location"]]
+        fact_qty = (
+            scan[scan["barcode"] != ""][["cell_barcode", "barcode", "amount_in_location"]]
+            .groupby(["cell_barcode", "barcode"], as_index=False)["amount_in_location"].sum()
+        )
 
         qty_merged = plan_qty.merge(fact_qty, on=["cell_barcode", "barcode"], how="outer")
         qty_merged["amount_available"] = qty_merged["amount_available"].fillna(0)
