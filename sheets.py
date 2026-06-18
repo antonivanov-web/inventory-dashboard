@@ -64,15 +64,15 @@ def bulk_write(worksheet_name: str, headers: list[str], rows: list[list], progre
     except gspread.WorksheetNotFound:
         ws = spreadsheet.add_worksheet(worksheet_name, rows=1, cols=len(headers))
 
-    chunk = 5000
+    total_rows = len(rows) + 1
+    ws.resize(rows=max(total_rows + 10, 10), cols=max(len(headers), 5))
+
     all_rows = [headers] + rows
+    chunk = 3000
     for i in range(0, len(all_rows), chunk):
         batch = all_rows[i : i + chunk]
-        if i == 0:
-            ws.update("A1", batch, value_input_option="RAW")
-        else:
-            start_row = i + 1
-            ws.update(f"A{start_row}", batch, value_input_option="RAW")
+        start_row = i + 1
+        ws.update(f"A{start_row}", batch, value_input_option="RAW")
         if progress_cb:
             progress_cb(min(i + chunk, len(all_rows)), len(all_rows))
 
