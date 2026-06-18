@@ -69,7 +69,7 @@ if page == PAGES[0]:
     pct_overall = scanned_cells / total_cells * 100 if total_cells > 0 else 0
     col3.metric("Выполнено", f"{pct_overall:.1f}%")
 
-    if not assignments.empty and not scan.empty:
+    if not assignments.empty and "Ячейка" in assignments.columns and not scan.empty:
         st.subheader("По сотрудникам")
         asgn = assignments.copy()
         asgn["Ячейка"] = asgn["Ячейка"].astype(str).str.strip()
