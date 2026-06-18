@@ -315,14 +315,16 @@ elif page == PAGES[2]:
     if topo_file and st.button("Записать топологию", key="btn_topo"):
         with st.spinner("Читаем файл..."):
             df = pd.read_excel(topo_file, sheet_name=0, header=0)
-            df = df.iloc[:, :5]
-            df.columns = ["Ячейка", "Зона", "Ряд", "Стеллаж", "Ячейка_номер"]
-            df = df.dropna(subset=["Ячейка"])
+            df = df.dropna(how="all")
+            # First column is always the cell barcode
+            first_col = df.columns[0]
+            df = df[df[first_col].astype(str).str.strip().ne("")]
             rows = df.astype(str).values.tolist()
+            headers = list(df.columns)
         progress = st.progress(0, text="Запись в Google Sheets...")
         def topo_progress(done, total):
             progress.progress(done / total, text=f"Записано {done:,} из {total:,}")
-        sh.bulk_write("topology", list(df.columns), rows, topo_progress)
+        sh.bulk_write("topology", headers, rows, topo_progress)
         st.cache_data.clear()
         st.success(f"Топология загружена: {len(rows):,} ячеек")
 
