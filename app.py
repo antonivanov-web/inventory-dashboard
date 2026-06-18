@@ -377,7 +377,9 @@ elif page == PAGES[2]:
     asgn_file = st.file_uploader("Загрузить задания", type=["xlsx", "xls"], key="asgn")
     if asgn_file and st.button("Записать задания", key="btn_asgn"):
         with st.spinner("Читаем файл..."):
-            df = pd.read_excel(asgn_file, sheet_name=0, header=0)
+            xl = pd.ExcelFile(asgn_file)
+            sheet = "Лист1" if "Лист1" in xl.sheet_names else xl.sheet_names[0]
+            df = pd.read_excel(xl, sheet_name=sheet, header=0)
             df = df.fillna("")
             rows = df.astype(str).values.tolist()
             headers = list(df.columns)
