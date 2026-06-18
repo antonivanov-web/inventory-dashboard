@@ -69,6 +69,8 @@ if page == PAGES[0]:
     pct_overall = scanned_cells / total_cells * 100 if total_cells > 0 else 0
     col3.metric("Выполнено", f"{pct_overall:.1f}%")
 
+    scanned_set = set(scan["cell_barcode"].unique()) if not scan.empty else set()
+
     if not assignments.empty and "Ячейка" in assignments.columns and not scan.empty:
         st.subheader("По сотрудникам")
         asgn = assignments.copy()
