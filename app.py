@@ -89,6 +89,18 @@ if page == PAGES[0]:
         emp_table["% выполнения"] = (emp_table["Посчитано"] / emp_table["Задание"] * 100).round(1)
         emp_table = emp_table.sort_values("% выполнения")
 
+        all_missed = asgn[~asgn["посчитана"]][["Сотрудник", "Ячейка"]].copy()
+        if not all_missed.empty:
+            buf_all = io.BytesIO()
+            all_missed.to_excel(buf_all, index=False)
+            st.download_button(
+                "⬇️ Скачать все непосчитанные ячейки (все сотрудники)",
+                data=buf_all.getvalue(),
+                file_name="missed_all.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_all",
+            )
+
         for _, emp_row in emp_table.iterrows():
             emp = emp_row["Сотрудник"]
             with st.expander(f"**{emp}** — {emp_row['% выполнения']}% ({emp_row['Посчитано']:.0f} из {emp_row['Задание']:.0f})"):
