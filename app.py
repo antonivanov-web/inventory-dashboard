@@ -314,7 +314,10 @@ elif page == PAGES[2]:
     topo_file = st.file_uploader("Загрузить топологию", type=["xlsx", "xls"], key="topo")
     if topo_file and st.button("Записать топологию", key="btn_topo"):
         with st.spinner("Читаем файл..."):
-            df = pd.read_excel(topo_file, sheet_name=0, header=0)
+            xl = pd.ExcelFile(topo_file)
+            # prefer "Лист1" if exists, otherwise first sheet
+            sheet = "Лист1" if "Лист1" in xl.sheet_names else xl.sheet_names[0]
+            df = pd.read_excel(xl, sheet_name=sheet, header=0)
             df = df.dropna(how="all")
             # First column is always the cell barcode
             first_col = df.columns[0]
