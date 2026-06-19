@@ -255,52 +255,52 @@ if page == PAGES[0]:
         )
 
         # Plan vs fact per SKU for scanned cells
-        sku_plan_qty = (
-            products[products["cell_barcode"].isin(scanned_set)]
-            .groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
-            .rename(columns={"amount_in_location": "plan_qty"})
-        )
         b2sku2 = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
+
+        # Plan: total amount_in_location per SKU across ALL cells
+        sku_plan_qty = (
+            products.groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
+            .rename(columns={"amount_in_location": "План"})
+        )
+
+        # Fact: total scanned per SKU across all scanned cells
         sku_fact_qty = (
             scan[scan["barcode"] != ""]
             .merge(b2sku2, on="barcode", how="inner")
             .groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
-            .rename(columns={"amount_in_location": "fact_qty"})
+            .rename(columns={"amount_in_location": "Факт"})
         )
-        sku_qty = sku_plan_qty.merge(sku_fact_qty, on="SKU WMS ID", how="inner").fillna(0)
-        sku_qty["discrepancy"] = sku_qty["plan_qty"] != sku_qty["fact_qty"]
 
+        # Only fully counted SKUs (all plan cells scanned)
         fully_counted = int(sku_status["all_scanned"].sum())
-        with_disc = int(sku_qty["discrepancy"].sum())
+
+        # Compare plan vs fact for fully counted SKUs only
+        fully_counted_skus = sku_status[sku_status["all_scanned"]]["SKU WMS ID"]
+        sku_compare = (
+            sku_plan_qty[sku_plan_qty["SKU WMS ID"].isin(fully_counted_skus)]
+            .merge(sku_fact_qty, on="SKU WMS ID", how="left").fillna(0)
+        )
+        sku_compare["Разница"] = sku_compare["Факт"] - sku_compare["План"]
+        sku_compare["discrepancy"] = sku_compare["План"] != sku_compare["Факт"]
+        with_disc = int(sku_compare["discrepancy"].sum())
 
         col1, col2 = st.columns(2)
         col1.metric("SKU подсчитано полностью", f"{fully_counted:,}")
         col2.metric("SKU с расхождениями", f"{with_disc:,}")
 
-        disc_skus = sku_qty[sku_qty["discrepancy"]].merge(
-            products[["SKU WMS ID", "name"]].drop_duplicates("SKU WMS ID"), on="SKU WMS ID", how="left"
+        disc_detail = (
+            sku_compare[sku_compare["discrepancy"]]
+            .merge(products[["SKU WMS ID", "name"]].drop_duplicates("SKU WMS ID"), on="SKU WMS ID", how="left")
+            [["SKU WMS ID", "name", "План", "Факт", "Разница"]]
+            .rename(columns={"SKU WMS ID": "SKU", "name": "Наименование"})
+            .sort_values("Разница")
         )
-
-        # Build detail: cell / SKU / plan / fact
-        detail = (
-            products[products["cell_barcode"].isin(scanned_set) & products["barcodes"].astype(str).ne("")]
-            [["cell_barcode", "SKU WMS ID", "amount_in_location"]]
-            .rename(columns={"amount_in_location": "План"})
-            .merge(
-                scan[scan["barcode"] != ""]
-                .merge(b2sku2, on="barcode", how="inner")
-                .groupby(["cell_barcode", "SKU WMS ID"])["amount_in_location"].sum().reset_index()
-                .rename(columns={"amount_in_location": "Факт"}),
-                on=["cell_barcode", "SKU WMS ID"], how="inner"
-            )
-        )
-        detail = detail[detail["План"] != detail["Факт"]].rename(columns={"cell_barcode": "Ячейка"})
 
         with st.expander(f"Детализация SKU с расхождениями ({with_disc:,})"):
-            st.dataframe(detail.sort_values("Ячейка"), use_container_width=True, hide_index=True)
-            if not detail.empty:
+            st.dataframe(disc_detail, use_container_width=True, hide_index=True)
+            if not disc_detail.empty:
                 buf = io.BytesIO()
-                detail.to_excel(buf, index=False)
+                disc_detail.to_excel(buf, index=False)
                 st.download_button(
                     "⬇️ Скачать расхождения по SKU",
                     data=buf.getvalue(),
