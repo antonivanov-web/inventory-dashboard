@@ -443,8 +443,37 @@ elif page == PAGES[2]:
 
     st.divider()
 
+    # Backfill SKU
+    st.subheader("4. Заполнить SKU WMS ID в результатах сканирования")
+    st.caption("Добавляет SKU WMS ID к уже загруженным результатам по баркоду из справочника товаров")
+    if st.button("🔗 Заполнить SKU", key="btn_backfill"):
+        with st.spinner("Загружаем данные..."):
+            scan_df = sh.load_sheet("scan_results")
+            prod_df = sh.load_sheet("products")
+
+        prod_df["barcodes"] = prod_df["barcodes"].astype(str).str.strip()
+        b2sku = (
+            prod_df[["barcodes", "SKU WMS ID"]]
+            .rename(columns={"barcodes": "barcode"})
+            .drop_duplicates("barcode")
+        )
+        scan_df["barcode"] = scan_df["barcode"].astype(str).str.strip()
+        scan_df = scan_df.drop(columns=["SKU WMS ID"], errors="ignore")
+        scan_df = scan_df.merge(b2sku, on="barcode", how="left")
+        scan_df["SKU WMS ID"] = scan_df["SKU WMS ID"].fillna("")
+
+        cols = ["cell_barcode", "barcode", "SKU WMS ID", "amount_in_location", "uploaded_at"]
+        rows = scan_df[cols].astype(str).values.tolist()
+
+        with st.spinner(f"Записываем {len(rows):,} строк..."):
+            sh.bulk_write("scan_results", cols, rows)
+        st.cache_data.clear()
+        st.success(f"Готово — обновлено {len(rows):,} строк")
+
+    st.divider()
+
     # Reset scan results
-    st.subheader("4. Сбросить результаты сканирования")
+    st.subheader("5. Сбросить результаты сканирования")
     st.caption("Очищает лист scan_results. Используй с осторожностью.")
     if st.button("🗑️ Очистить scan_results", type="secondary"):
         sh.bulk_write("scan_results", sh.SHEET_HEADERS["scan_results"], [])
