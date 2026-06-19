@@ -338,25 +338,21 @@ elif page == PAGES[1]:
         st.write(f"Распознано: **{new_df['cell_barcode'].nunique()}** ячеек, **{len(new_df)}** записей из {len(uploaded_files)} файлов")
         st.dataframe(new_df.head(20), use_container_width=True, hide_index=True)
 
-        with st.spinner("Проверка дублей..."):
-            existing_cells = sh.get_existing_cells()
-
         new_cells = set(new_df["cell_barcode"].unique())
-        duplicate_cells = new_cells & existing_cells
-        new_only = new_df[~new_df["cell_barcode"].isin(duplicate_cells)]
+
+        with st.spinner("Проверка дублей..."):
+            existing_scan = sh.load_sheet("scan_results")
+
+        duplicate_cells = new_cells & set(existing_scan["cell_barcode"].astype(str).unique()) if not existing_scan.empty else set()
 
         if duplicate_cells:
-            st.warning(
-                f"Найдено {len(duplicate_cells)} ячеек которые уже загружены — они будут пропущены:\n"
+            st.info(
+                f"Найдено {len(duplicate_cells)} ячеек которые уже загружены — они будут **перезаписаны**:\n"
                 + ", ".join(sorted(duplicate_cells)[:10])
                 + ("..." if len(duplicate_cells) > 10 else "")
             )
 
-        if new_only.empty:
-            st.info("Все ячейки уже загружены. Новых данных нет.")
-            st.stop()
-
-        st.success(f"Будет загружено: **{new_only['cell_barcode'].nunique()}** новых ячеек, **{len(new_only)}** записей")
+        st.success(f"Будет загружено: **{new_df['cell_barcode'].nunique()}** ячеек, **{len(new_df)}** записей")
 
         if st.button("✅ Загрузить в Google Sheets", type="primary"):
             products_cached = sh.load_sheet("products")
@@ -365,11 +361,24 @@ elif page == PAGES[1]:
             prod_exp = prod_exp.explode("barcodes")
             prod_exp["barcodes"] = prod_exp["barcodes"].str.strip()
             b2sku = prod_exp[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
-            new_only = new_only.merge(b2sku, on="barcode", how="left")
-            new_only["SKU WMS ID"] = new_only["SKU WMS ID"].fillna("")
-            rows = new_only[["cell_barcode", "barcode", "SKU WMS ID", "amount_in_location", "uploaded_at"]].values.tolist()
+            new_df = new_df.merge(b2sku, on="barcode", how="left")
+            new_df["SKU WMS ID"] = new_df["SKU WMS ID"].fillna("")
+
+            cols = ["cell_barcode", "barcode", "SKU WMS ID", "amount_in_location", "uploaded_at"]
+
+            # Merge: keep existing rows for cells not in new upload, replace rows for cells in new upload
+            if not existing_scan.empty:
+                kept = existing_scan[~existing_scan["cell_barcode"].astype(str).isin(new_cells)]
+                for c in cols:
+                    if c not in kept.columns:
+                        kept[c] = ""
+                combined = pd.concat([kept[cols], new_df[cols]], ignore_index=True)
+            else:
+                combined = new_df[cols]
+
+            rows = combined.astype(str).values.tolist()
             with st.spinner("Загрузка..."):
-                sh.append_rows("scan_results", rows)
+                sh.bulk_write("scan_results", cols, rows)
             st.cache_data.clear()
             st.success("Загружено успешно!")
             st.rerun()
