@@ -178,10 +178,10 @@ if page == PAGES[0]:
         st.info("Нет данных сканирования")
     else:
         barcode_to_sku = (
-            products[["barcodes", "SKU WMS ID", "cell_barcode"]]
+            products[["barcodes", "SKU WMS ID"]]
             .rename(columns={"barcodes": "barcode"})
+            .drop_duplicates("barcode")
         )
-        # fact: only barcodes that matched to a SKU in scanned cells
         fact_with_sku = (
             scan[scan["barcode"] != ""]
             .merge(barcode_to_sku, on="barcode", how="inner")
