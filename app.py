@@ -182,10 +182,8 @@ if page == PAGES[0]:
             .rename(columns={"barcodes": "barcode"})
             .drop_duplicates("barcode")
         )
-        fact_with_sku = (
-            scan[scan["barcode"] != ""]
-            .merge(barcode_to_sku, on="barcode", how="inner")
-        )
+        scan_no_sku = scan[scan["barcode"] != ""].drop(columns=["SKU WMS ID"], errors="ignore")
+        fact_with_sku = scan_no_sku.merge(barcode_to_sku, on="barcode", how="inner")
         sku_fact = fact_with_sku.groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
 
         sku_plan = (
@@ -239,7 +237,7 @@ if page == PAGES[0]:
         # Scanned cells per SKU (via barcode match)
         b2sku = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
         scan_sku = (
-            scan[scan["barcode"] != ""]
+            scan[scan["barcode"] != ""].drop(columns=["SKU WMS ID"], errors="ignore")
             .merge(b2sku, on="barcode", how="inner")
             .groupby("SKU WMS ID")["cell_barcode"]
             .apply(set).reset_index()
@@ -255,7 +253,7 @@ if page == PAGES[0]:
         )
 
         # Plan vs fact per SKU for scanned cells
-        b2sku2 = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
+        b2sku2 = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
 
         # Plan: total amount_in_location per SKU across ALL cells
         sku_plan_qty = (
@@ -265,7 +263,7 @@ if page == PAGES[0]:
 
         # Fact: total scanned per SKU across all scanned cells
         sku_fact_qty = (
-            scan[scan["barcode"] != ""]
+            scan[scan["barcode"] != ""].drop(columns=["SKU WMS ID"], errors="ignore")
             .merge(b2sku2, on="barcode", how="inner")
             .groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
             .rename(columns={"amount_in_location": "Факт"})
