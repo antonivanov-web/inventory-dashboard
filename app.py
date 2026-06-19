@@ -183,7 +183,8 @@ if page == PAGES[0]:
         st.info("Нет данных сканирования")
     else:
         sku_plan = (
-            products.groupby("SKU WMS ID")["amount_available"].sum().reset_index()
+            products[products["cell_barcode"].isin(scanned_set)]
+            .groupby("SKU WMS ID")["amount_available"].sum().reset_index()
         )
 
         barcode_to_sku = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
