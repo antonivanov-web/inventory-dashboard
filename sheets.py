@@ -61,7 +61,7 @@ def bulk_write(worksheet_name: str, headers: list[str], rows: list[list], progre
     try:
         ws = spreadsheet.worksheet(worksheet_name)
         ws.clear()
-    except gspread.WorksheetNotFound:
+    except gspread.exceptions.WorksheetNotFound:
         ws = spreadsheet.add_worksheet(worksheet_name, rows=1, cols=len(headers))
 
     total_rows = len(rows) + 1
