@@ -52,6 +52,12 @@ if page == PAGES[0]:
     products["barcodes"] = products["barcodes"].astype(str).str.strip()
     products["cell_barcode"] = products["cell_barcode"].astype(str).str.strip()
     products["amount_available"] = pd.to_numeric(products["amount_available"], errors="coerce").fillna(0)
+
+    # Expand multi-barcode rows: "4680328014369, 04680825413887" → two rows
+    products_expanded = products.copy()
+    products_expanded["barcodes"] = products_expanded["barcodes"].str.split(r",\s*")
+    products_expanded = products_expanded.explode("barcodes")
+    products_expanded["barcodes"] = products_expanded["barcodes"].str.strip()
     if not scan.empty:
         scan["cell_barcode"] = scan["cell_barcode"].astype(str).str.strip()
         scan["barcode"] = scan["barcode"].astype(str).str.strip()
@@ -129,9 +135,9 @@ if page == PAGES[0]:
         st.info("Нет данных сканирования")
     else:
         plan = (
-            products[
-                products["cell_barcode"].isin(scanned_set) &
-                products["barcodes"].astype(str).ne("")
+            products_expanded[
+                products_expanded["cell_barcode"].isin(scanned_set) &
+                products_expanded["barcodes"].astype(str).ne("")
             ][["cell_barcode", "barcodes", "amount_in_location"]]
             .rename(columns={"barcodes": "barcode", "amount_in_location": "plan_qty"})
             .groupby(["cell_barcode", "barcode"], as_index=False)["plan_qty"].sum()
@@ -158,7 +164,7 @@ if page == PAGES[0]:
         with st.expander("Детализация расхождений по ячейкам"):
             disc_detail = (
                 scanned_only[scanned_only["discrepancy"]]
-                .merge(products[["barcodes", "name"]].rename(columns={"barcodes": "barcode"}),
+                .merge(products_expanded[["barcodes", "name"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode"),
                        on="barcode", how="left")
                 [["cell_barcode", "barcode", "name", "plan_qty", "amount_in_location"]]
                 .rename(columns={
@@ -178,7 +184,7 @@ if page == PAGES[0]:
         st.info("Нет данных сканирования")
     else:
         barcode_to_sku = (
-            products[["barcodes", "SKU WMS ID"]]
+            products_expanded[["barcodes", "SKU WMS ID"]]
             .rename(columns={"barcodes": "barcode"})
             .drop_duplicates("barcode")
         )
@@ -228,14 +234,14 @@ if page == PAGES[0]:
     else:
         # All cells per SKU from products
         sku_all_cells = (
-            products[products["barcodes"].astype(str).ne("")]
+            products_expanded[products_expanded["barcodes"].astype(str).ne("")]
             .groupby("SKU WMS ID")["cell_barcode"]
             .apply(set).reset_index()
             .rename(columns={"cell_barcode": "plan_cells"})
         )
 
         # Scanned cells per SKU (via barcode match)
-        b2sku = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
+        b2sku = products_expanded[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
         scan_sku = (
             scan[scan["barcode"] != ""].drop(columns=["SKU WMS ID"], errors="ignore")
             .merge(b2sku, on="barcode", how="inner")
@@ -253,7 +259,7 @@ if page == PAGES[0]:
         )
 
         # Plan vs fact per SKU for scanned cells
-        b2sku2 = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
+        b2sku2 = products_expanded[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
 
         # Plan: total amount_in_location per SKU across ALL cells
         sku_plan_qty = (
@@ -353,7 +359,11 @@ elif page == PAGES[1]:
 
         if st.button("✅ Загрузить в Google Sheets", type="primary"):
             products_cached = sh.load_sheet("products")
-            b2sku = products_cached[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
+            prod_exp = products_cached.copy()
+            prod_exp["barcodes"] = prod_exp["barcodes"].astype(str).str.split(r",\s*")
+            prod_exp = prod_exp.explode("barcodes")
+            prod_exp["barcodes"] = prod_exp["barcodes"].str.strip()
+            b2sku = prod_exp[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
             new_only = new_only.merge(b2sku, on="barcode", how="left")
             new_only["SKU WMS ID"] = new_only["SKU WMS ID"].fillna("")
             rows = new_only[["cell_barcode", "barcode", "SKU WMS ID", "amount_in_location", "uploaded_at"]].values.tolist()
@@ -450,8 +460,12 @@ elif page == PAGES[2]:
             prod_df = sh.load_sheet("products")
 
         prod_df["barcodes"] = prod_df["barcodes"].astype(str).str.strip()
+        prod_df_exp = prod_df.copy()
+        prod_df_exp["barcodes"] = prod_df_exp["barcodes"].str.split(r",\s*")
+        prod_df_exp = prod_df_exp.explode("barcodes")
+        prod_df_exp["barcodes"] = prod_df_exp["barcodes"].str.strip()
         b2sku = (
-            prod_df[["barcodes", "SKU WMS ID"]]
+            prod_df_exp[["barcodes", "SKU WMS ID"]]
             .rename(columns={"barcodes": "barcode"})
             .drop_duplicates("barcode")
         )
