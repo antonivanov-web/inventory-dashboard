@@ -52,6 +52,7 @@ if page == PAGES[0]:
     products["barcodes"] = products["barcodes"].astype(str).str.strip()
     products["cell_barcode"] = products["cell_barcode"].astype(str).str.strip()
     products["amount_available"] = pd.to_numeric(products["amount_available"], errors="coerce").fillna(0)
+    products["amount_in_location"] = pd.to_numeric(products["amount_in_location"], errors="coerce").fillna(0)
 
     # Expand multi-barcode rows: "4680328014369, 04680825413887" → two rows
     products_expanded = products.copy()

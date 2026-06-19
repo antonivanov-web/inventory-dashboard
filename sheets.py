@@ -47,8 +47,11 @@ def ensure_sheets():
 @st.cache_data(ttl=3600)
 def load_sheet(worksheet_name: str) -> pd.DataFrame:
     ws = get_spreadsheet().worksheet(worksheet_name)
-    records = ws.get_all_records()
-    return pd.DataFrame(records)
+    rows = ws.get_all_values()
+    if not rows:
+        return pd.DataFrame()
+    headers = rows[0]
+    return pd.DataFrame(rows[1:], columns=headers)
 
 
 def append_rows(worksheet_name: str, rows: list[list]):
