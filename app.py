@@ -182,16 +182,25 @@ if page == PAGES[0]:
     if scan.empty:
         st.info("Нет данных сканирования")
     else:
+        barcode_to_sku = (
+            products[["barcodes", "SKU WMS ID", "cell_barcode"]]
+            .rename(columns={"barcodes": "barcode"})
+        )
+        # fact: only barcodes that matched to a SKU in scanned cells
+        fact_with_sku = (
+            scan[scan["barcode"] != ""]
+            .merge(barcode_to_sku, on="barcode", how="inner")
+        )
+        sku_fact = fact_with_sku.groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
+
+        # plan: same SKUs, same scanned cells
         sku_plan = (
             products[products["cell_barcode"].isin(scanned_set)]
             .groupby("SKU WMS ID")["amount_available"].sum().reset_index()
         )
 
-        barcode_to_sku = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
-        fact_with_sku = scan[scan["barcode"] != ""].merge(barcode_to_sku, on="barcode", how="left")
-        sku_fact = fact_with_sku.groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
-
-        sku_merged = sku_plan.merge(sku_fact, on="SKU WMS ID", how="outer").fillna(0)
+        # only compare SKUs that appear in both plan and fact
+        sku_merged = sku_plan.merge(sku_fact, on="SKU WMS ID", how="inner").fillna(0)
         sku_merged["discrepancy"] = sku_merged["amount_available"] != sku_merged["amount_in_location"]
 
         total_sku = len(sku_merged)
