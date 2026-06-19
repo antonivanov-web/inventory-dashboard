@@ -354,7 +354,11 @@ elif page == PAGES[1]:
         st.success(f"Будет загружено: **{new_only['cell_barcode'].nunique()}** новых ячеек, **{len(new_only)}** записей")
 
         if st.button("✅ Загрузить в Google Sheets", type="primary"):
-            rows = new_only[["cell_barcode", "barcode", "amount_in_location", "uploaded_at"]].values.tolist()
+            products_cached = sh.load_sheet("products")
+            b2sku = products_cached[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode")
+            new_only = new_only.merge(b2sku, on="barcode", how="left")
+            new_only["SKU WMS ID"] = new_only["SKU WMS ID"].fillna("")
+            rows = new_only[["cell_barcode", "barcode", "SKU WMS ID", "amount_in_location", "uploaded_at"]].values.tolist()
             with st.spinner("Загрузка..."):
                 sh.append_rows("scan_results", rows)
             st.cache_data.clear()

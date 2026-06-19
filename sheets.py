@@ -14,7 +14,7 @@ SHEET_HEADERS = {
         "ОСГ", "partner_id", "warehouse_id",
     ],
     "assignments": ["Ячейка", "Зона", "Ряд", "Стеллаж", "Ячейка_номер", "Сотрудник"],
-    "scan_results": ["cell_barcode", "barcode", "amount_in_location", "uploaded_at"],
+    "scan_results": ["cell_barcode", "barcode", "SKU WMS ID", "amount_in_location", "uploaded_at"],
 }
 
 
