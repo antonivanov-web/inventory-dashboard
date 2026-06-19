@@ -132,9 +132,9 @@ if page == PAGES[0]:
             products[
                 products["cell_barcode"].isin(scanned_set) &
                 products["barcodes"].astype(str).ne("")
-            ][["cell_barcode", "barcodes", "amount_available"]]
-            .rename(columns={"barcodes": "barcode"})
-            .groupby(["cell_barcode", "barcode"], as_index=False)["amount_available"].sum()
+            ][["cell_barcode", "barcodes", "amount_in_location"]]
+            .rename(columns={"barcodes": "barcode", "amount_in_location": "plan_qty"})
+            .groupby(["cell_barcode", "barcode"], as_index=False)["plan_qty"].sum()
         )
         fact = (
             scan[scan["barcode"] != ""][["cell_barcode", "barcode", "amount_in_location"]]
@@ -142,11 +142,9 @@ if page == PAGES[0]:
         )
 
         merged_cells = plan.merge(fact, on=["cell_barcode", "barcode"], how="outer")
-        merged_cells["amount_available"] = merged_cells["amount_available"].fillna(0)
+        merged_cells["plan_qty"] = merged_cells["plan_qty"].fillna(0)
         merged_cells["amount_in_location"] = merged_cells["amount_in_location"].fillna(0)
-        merged_cells["discrepancy"] = (
-            merged_cells["amount_available"] != merged_cells["amount_in_location"]
-        )
+        merged_cells["discrepancy"] = merged_cells["plan_qty"] != merged_cells["amount_in_location"]
 
         scanned_only = merged_cells[merged_cells["cell_barcode"].isin(scanned_set)]
         cells_with_disc = scanned_only[scanned_only["discrepancy"]]["cell_barcode"].nunique()
@@ -162,13 +160,10 @@ if page == PAGES[0]:
                 scanned_only[scanned_only["discrepancy"]]
                 .merge(products[["barcodes", "name"]].rename(columns={"barcodes": "barcode"}),
                        on="barcode", how="left")
-                [["cell_barcode", "barcode", "name", "amount_available", "amount_in_location"]]
+                [["cell_barcode", "barcode", "name", "plan_qty", "amount_in_location"]]
                 .rename(columns={
-                    "cell_barcode": "Ячейка",
-                    "barcode": "Баркод",
-                    "name": "Наименование",
-                    "amount_available": "План",
-                    "amount_in_location": "Факт",
+                    "cell_barcode": "Ячейка", "barcode": "Баркод", "name": "Наименование",
+                    "plan_qty": "План", "amount_in_location": "Факт",
                 })
             )
             disc_detail["Разница"] = disc_detail["Факт"] - disc_detail["План"]
@@ -193,18 +188,17 @@ if page == PAGES[0]:
         )
         sku_fact = fact_with_sku.groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
 
-        # plan: same SKUs, same scanned cells
         sku_plan = (
             products[products["cell_barcode"].isin(scanned_set)]
-            .groupby("SKU WMS ID")["amount_available"].sum().reset_index()
+            .groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
+            .rename(columns={"amount_in_location": "plan_qty"})
         )
 
-        # only compare SKUs that appear in both plan and fact
         sku_merged = sku_plan.merge(sku_fact, on="SKU WMS ID", how="inner").fillna(0)
-        sku_merged["discrepancy"] = sku_merged["amount_available"] != sku_merged["amount_in_location"]
+        sku_merged["discrepancy"] = sku_merged["plan_qty"] != sku_merged["amount_in_location"]
 
         total_sku = len(sku_merged)
-        sku_disc = sku_merged["discrepancy"].sum()
+        sku_disc = int(sku_merged["discrepancy"].sum())
         sku_disc_rate = sku_disc / total_sku * 100 if total_sku > 0 else 0
 
         col1, col2, col3 = st.columns(3)
@@ -216,12 +210,10 @@ if page == PAGES[0]:
             sku_detail = (
                 sku_merged[sku_merged["discrepancy"]]
                 .merge(products[["SKU WMS ID", "name"]].drop_duplicates("SKU WMS ID"), on="SKU WMS ID", how="left")
-                [["SKU WMS ID", "name", "amount_available", "amount_in_location"]]
+                [["SKU WMS ID", "name", "plan_qty", "amount_in_location"]]
                 .rename(columns={
-                    "SKU WMS ID": "SKU",
-                    "name": "Наименование",
-                    "amount_available": "План (кол-во)",
-                    "amount_in_location": "Факт (кол-во)",
+                    "SKU WMS ID": "SKU", "name": "Наименование",
+                    "plan_qty": "План (кол-во)", "amount_in_location": "Факт (кол-во)",
                 })
             )
             sku_detail["Разница"] = sku_detail["Факт (кол-во)"] - sku_detail["План (кол-во)"]
@@ -230,55 +222,91 @@ if page == PAGES[0]:
 
     st.divider()
 
-    # ── Block 4: Quantity discrepancies ───────────────────────────────────────
-    st.header("4. Расхождения по количеству (amount_available)")
+    # ── Block 4: SKU completion ────────────────────────────────────────────────
+    st.header("4. Полнота подсчёта SKU")
 
     if scan.empty:
         st.info("Нет данных сканирования")
     else:
-        plan_qty = (
-            products[
-                products["cell_barcode"].isin(scanned_set) &
-                products["barcodes"].astype(str).ne("")
-            ][["cell_barcode", "barcodes", "name", "amount_available"]]
-            .rename(columns={"barcodes": "barcode"})
-            .groupby(["cell_barcode", "barcode", "name"], as_index=False)["amount_available"].sum()
-        )
-        fact_qty = (
-            scan[scan["barcode"] != ""][["cell_barcode", "barcode", "amount_in_location"]]
-            .groupby(["cell_barcode", "barcode"], as_index=False)["amount_in_location"].sum()
+        # All cells per SKU from products
+        sku_all_cells = (
+            products[products["barcodes"].astype(str).ne("")]
+            .groupby("SKU WMS ID")["cell_barcode"]
+            .apply(set).reset_index()
+            .rename(columns={"cell_barcode": "plan_cells"})
         )
 
-        qty_merged = plan_qty.merge(fact_qty, on=["cell_barcode", "barcode"], how="outer")
-        qty_merged["amount_available"] = qty_merged["amount_available"].fillna(0)
-        qty_merged["amount_in_location"] = qty_merged["amount_in_location"].fillna(0)
-        qty_merged["diff"] = qty_merged["amount_in_location"] - qty_merged["amount_available"]
+        # Scanned cells per SKU (via barcode match)
+        b2sku = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
+        scan_sku = (
+            scan[scan["barcode"] != ""]
+            .merge(b2sku, on="barcode", how="inner")
+            .groupby("SKU WMS ID")["cell_barcode"]
+            .apply(set).reset_index()
+            .rename(columns={"cell_barcode": "scanned_cells"})
+        )
 
-        total_plan = int(qty_merged["amount_available"].sum())
-        total_fact = int(qty_merged["amount_in_location"].sum())
-        total_diff = total_fact - total_plan
+        sku_status = sku_all_cells.merge(scan_sku, on="SKU WMS ID", how="left")
+        sku_status["scanned_cells"] = sku_status["scanned_cells"].apply(
+            lambda x: x if isinstance(x, set) else set()
+        )
+        sku_status["all_scanned"] = sku_status.apply(
+            lambda r: r["plan_cells"].issubset(scanned_set), axis=1
+        )
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("План (шт.)", f"{total_plan:,}")
-        col2.metric("Факт (шт.)", f"{total_fact:,}")
-        delta_str = f"{total_diff:+,}"
-        col3.metric("Разница", delta_str, delta=delta_str)
+        # Plan vs fact per SKU for scanned cells
+        sku_plan_qty = (
+            products[products["cell_barcode"].isin(scanned_set)]
+            .groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
+            .rename(columns={"amount_in_location": "plan_qty"})
+        )
+        b2sku2 = products[["barcodes", "SKU WMS ID"]].rename(columns={"barcodes": "barcode"})
+        sku_fact_qty = (
+            scan[scan["barcode"] != ""]
+            .merge(b2sku2, on="barcode", how="inner")
+            .groupby("SKU WMS ID")["amount_in_location"].sum().reset_index()
+            .rename(columns={"amount_in_location": "fact_qty"})
+        )
+        sku_qty = sku_plan_qty.merge(sku_fact_qty, on="SKU WMS ID", how="inner").fillna(0)
+        sku_qty["discrepancy"] = sku_qty["plan_qty"] != sku_qty["fact_qty"]
 
-        with st.expander("Детализация расхождений по количеству"):
-            qty_detail = (
-                qty_merged[qty_merged["diff"] != 0]
-                [["cell_barcode", "barcode", "name", "amount_available", "amount_in_location", "diff"]]
-                .rename(columns={
-                    "cell_barcode": "Ячейка",
-                    "barcode": "Баркод",
-                    "name": "Наименование",
-                    "amount_available": "План",
-                    "amount_in_location": "Факт",
-                    "diff": "Разница",
-                })
-                .sort_values("Разница")
+        fully_counted = int(sku_status["all_scanned"].sum())
+        with_disc = int(sku_qty["discrepancy"].sum())
+
+        col1, col2 = st.columns(2)
+        col1.metric("SKU подсчитано полностью", f"{fully_counted:,}")
+        col2.metric("SKU с расхождениями", f"{with_disc:,}")
+
+        disc_skus = sku_qty[sku_qty["discrepancy"]].merge(
+            products[["SKU WMS ID", "name"]].drop_duplicates("SKU WMS ID"), on="SKU WMS ID", how="left"
+        )
+
+        # Build detail: cell / SKU / plan / fact
+        detail = (
+            products[products["cell_barcode"].isin(scanned_set) & products["barcodes"].astype(str).ne("")]
+            [["cell_barcode", "SKU WMS ID", "amount_in_location"]]
+            .rename(columns={"amount_in_location": "План"})
+            .merge(
+                scan[scan["barcode"] != ""]
+                .merge(b2sku2, on="barcode", how="inner")
+                .groupby(["cell_barcode", "SKU WMS ID"])["amount_in_location"].sum().reset_index()
+                .rename(columns={"amount_in_location": "Факт"}),
+                on=["cell_barcode", "SKU WMS ID"], how="inner"
             )
-            st.dataframe(qty_detail, use_container_width=True, hide_index=True)
+        )
+        detail = detail[detail["План"] != detail["Факт"]].rename(columns={"cell_barcode": "Ячейка"})
+
+        with st.expander(f"Детализация SKU с расхождениями ({with_disc:,})"):
+            st.dataframe(detail.sort_values("Ячейка"), use_container_width=True, hide_index=True)
+            if not detail.empty:
+                buf = io.BytesIO()
+                detail.to_excel(buf, index=False)
+                st.download_button(
+                    "⬇️ Скачать расхождения по SKU",
+                    data=buf.getvalue(),
+                    file_name="sku_discrepancies.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
 
 # ── UPLOAD RESULTS ─────────────────────────────────────────────────────────────
