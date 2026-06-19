@@ -44,7 +44,7 @@ def ensure_sheets():
             pass
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def load_sheet(worksheet_name: str) -> pd.DataFrame:
     ws = get_spreadsheet().worksheet(worksheet_name)
     records = ws.get_all_records()
