@@ -90,6 +90,7 @@ def update_single_column(worksheet_name: str, col_name: str, values: list):
         col_idx = headers.index(col_name) + 1  # 1-based
     else:
         col_idx = len(headers) + 1
+        ws.resize(cols=col_idx)
         ws.update_cell(1, col_idx, col_name)
 
     col_letter = gspread.utils.rowcol_to_a1(1, col_idx)[:-1]
