@@ -192,7 +192,7 @@ if page == PAGES[0]:
             rack_totals[["Стеллаж", "barcode", "rack_match"]],
             on=["Стеллаж", "barcode"], how="left"
         )
-        outside_rack = outside_rack[~outside_rack["rack_match"]]
+        outside_rack = outside_rack[outside_rack["rack_match"].fillna(True) == False]
         outside_rack = outside_rack.merge(
             products_expanded[["barcodes", "name"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode"),
             on="barcode", how="left"
