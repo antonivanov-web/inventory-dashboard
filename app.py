@@ -380,7 +380,23 @@ elif page == PAGES[1]:
             with st.spinner("Загрузка..."):
                 sh.bulk_write("scan_results", cols, rows)
             st.cache_data.clear()
-            st.success("Загружено успешно!")
+            st.success(f"Загружено успешно! Новых ячеек: {len(new_cells - duplicate_cells)}, перезаписано: {len(duplicate_cells)}")
+
+            result_df = new_df[cols].copy()
+            result_df["_overwritten"] = result_df["cell_barcode"].isin(duplicate_cells)
+
+            def highlight_overwritten(row):
+                color = "background-color: #5a3e00; color: #ffd166" if row["_overwritten"] else ""
+                return [color] * len(row)
+
+            display_df = result_df.drop(columns=["_overwritten"])
+            st.dataframe(
+                result_df.drop(columns=["_overwritten"]).style.apply(
+                    highlight_overwritten, axis=1, subset=display_df.columns
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
             st.rerun()
 
 
