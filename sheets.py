@@ -93,8 +93,14 @@ def update_single_column(worksheet_name: str, col_name: str, values: list):
         ws.resize(cols=col_idx)
         ws.update_cell(1, col_idx, col_name)
 
-    col_letter = gspread.utils.rowcol_to_a1(1, col_idx)[:-1]
-    # Build range: from row 2 to len(values)+1
+    def col_to_letter(n):
+        result = ""
+        while n > 0:
+            n, r = divmod(n - 1, 26)
+            result = chr(65 + r) + result
+        return result
+
+    col_letter = col_to_letter(col_idx)
     cell_range = f"{col_letter}2:{col_letter}{len(values) + 1}"
     ws.update(cell_range, [[v] for v in values], value_input_option="RAW")
 
