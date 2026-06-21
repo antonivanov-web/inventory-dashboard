@@ -176,6 +176,40 @@ if page == PAGES[0]:
             disc_detail["Разница"] = disc_detail["Факт"] - disc_detail["План"]
             st.dataframe(disc_detail, use_container_width=True, hide_index=True)
 
+        # Discrepancies outside rack (quantity mismatch across the whole rack)
+        cell_to_rack = topology[["Ячейка", "Стеллаж"]].rename(columns={"Ячейка": "cell_barcode"})
+        disc_rows = scanned_only[scanned_only["discrepancy"]].copy()
+        disc_rows = disc_rows.merge(cell_to_rack, on="cell_barcode", how="left")
+
+        rack_totals = disc_rows.groupby(["Стеллаж", "barcode"]).agg(
+            plan_rack=("plan_qty", "sum"),
+            fact_rack=("amount_in_location", "sum")
+        ).reset_index()
+        rack_totals["rack_match"] = rack_totals["plan_rack"] == rack_totals["fact_rack"]
+
+        # Keep only rows where rack total doesn't match
+        outside_rack = disc_rows.merge(
+            rack_totals[["Стеллаж", "barcode", "rack_match"]],
+            on=["Стеллаж", "barcode"], how="left"
+        )
+        outside_rack = outside_rack[~outside_rack["rack_match"]]
+        outside_rack = outside_rack.merge(
+            products_expanded[["barcodes", "name"]].rename(columns={"barcodes": "barcode"}).drop_duplicates("barcode"),
+            on="barcode", how="left"
+        )[["cell_barcode", "barcode", "name", "plan_qty", "amount_in_location"]].rename(columns={
+            "cell_barcode": "Ячейка", "barcode": "Баркод", "name": "Наименование",
+            "plan_qty": "План", "amount_in_location": "Факт",
+        })
+        outside_rack["Разница"] = outside_rack["Факт"] - outside_rack["План"]
+
+        csv_outside = outside_rack.to_csv(index=False).encode("utf-8-sig")
+        st.download_button(
+            "⬇️ Выгрузить расхождения вне стеллажа",
+            data=csv_outside,
+            file_name="discrepancies_outside_rack.csv",
+            mime="text/csv",
+        )
+
     st.divider()
 
     # ── Block 3: SKU discrepancies ─────────────────────────────────────────────
