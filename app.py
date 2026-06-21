@@ -550,8 +550,54 @@ elif page == PAGES[2]:
 
     st.divider()
 
+    # Backfill fact_scanned
+    st.subheader("5. Пересчитать fact_scanned в products")
+    st.caption("Заполняет колонку fact_scanned по всем уже загруженным результатам сканирования")
+    if st.button("📊 Пересчитать fact_scanned", key="btn_fact_scanned"):
+        with st.spinner("Загружаем данные..."):
+            scan_all = sh.load_sheet("scan_results")
+            prod_raw = sh.load_sheet("products")
+
+        scan_all["amount_in_location"] = pd.to_numeric(scan_all["amount_in_location"], errors="coerce").fillna(0)
+        scanned_set_all = set(scan_all["cell_barcode"].astype(str).unique())
+
+        fact_lookup = (
+            scan_all[scan_all["barcode"] != ""]
+            .groupby(["cell_barcode", "barcode"])["amount_in_location"]
+            .sum().reset_index()
+        )
+
+        prod_exp_bf = prod_raw.copy()
+        prod_exp_bf["_row_idx"] = range(len(prod_exp_bf))
+        prod_exp_bf["barcodes"] = prod_exp_bf["barcodes"].astype(str).str.split(r",\s*")
+        prod_exp_bf = prod_exp_bf.explode("barcodes")
+        prod_exp_bf["barcodes"] = prod_exp_bf["barcodes"].str.strip()
+        prod_exp_bf["cell_barcode"] = prod_exp_bf["cell_barcode"].astype(str).str.strip()
+
+        matched_bf = prod_exp_bf.merge(
+            fact_lookup.rename(columns={"barcode": "barcodes"}),
+            on=["cell_barcode", "barcodes"], how="left"
+        )
+        matched_bf["amount_in_location"] = matched_bf["amount_in_location"].fillna(0)
+        row_fact_bf = matched_bf.groupby("_row_idx")["amount_in_location"].sum()
+
+        fact_values_bf = []
+        for i in range(len(prod_raw)):
+            cell_bc = str(prod_raw.iloc[i].get("cell_barcode", "")).strip()
+            if cell_bc in scanned_set_all:
+                fact_values_bf.append(str(int(row_fact_bf.get(i, 0))))
+            else:
+                fact_values_bf.append("")
+
+        with st.spinner("Записываем fact_scanned..."):
+            sh.update_single_column("products", "fact_scanned", fact_values_bf)
+        st.cache_data.clear()
+        st.success(f"Готово — обновлено {sum(1 for v in fact_values_bf if v != ''):,} строк")
+
+    st.divider()
+
     # Reset scan results
-    st.subheader("5. Сбросить результаты сканирования")
+    st.subheader("6. Сбросить результаты сканирования")
     st.caption("Очищает лист scan_results. Используй с осторожностью.")
     if st.button("🗑️ Очистить scan_results", type="secondary"):
         sh.bulk_write("scan_results", sh.SHEET_HEADERS["scan_results"], [])
