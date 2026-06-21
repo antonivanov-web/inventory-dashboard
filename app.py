@@ -377,8 +377,48 @@ elif page == PAGES[1]:
                 combined = new_df[cols]
 
             rows = combined.astype(str).values.tolist()
-            with st.spinner("Загрузка..."):
+            with st.spinner("Загрузка результатов сканирования..."):
                 sh.bulk_write("scan_results", cols, rows)
+
+            # Update fact_scanned column in products
+            with st.spinner("Обновление fact_scanned в products..."):
+                prod_raw = sh.load_sheet("products")
+                # Build fact lookup: (cell_barcode, barcode) → sum amount
+                scan_fact = (
+                    combined[combined["barcode"] != ""].copy()
+                )
+                scan_fact["amount_in_location"] = pd.to_numeric(scan_fact["amount_in_location"], errors="coerce").fillna(0)
+                fact_lookup = (
+                    scan_fact.groupby(["cell_barcode", "barcode"])["amount_in_location"]
+                    .sum().reset_index()
+                )
+                scanned_set_full = set(combined["cell_barcode"].astype(str).unique())
+
+                # Expand products barcodes for matching
+                prod_exp2 = prod_raw.copy()
+                prod_exp2["_row_idx"] = range(len(prod_exp2))
+                prod_exp2["barcodes"] = prod_exp2["barcodes"].astype(str).str.split(r",\s*")
+                prod_exp2 = prod_exp2.explode("barcodes")
+                prod_exp2["barcodes"] = prod_exp2["barcodes"].str.strip()
+                prod_exp2["cell_barcode"] = prod_exp2["cell_barcode"].astype(str).str.strip()
+
+                matched = prod_exp2.merge(
+                    fact_lookup.rename(columns={"barcode": "barcodes"}),
+                    on=["cell_barcode", "barcodes"], how="left"
+                )
+                matched["amount_in_location"] = matched["amount_in_location"].fillna(0)
+                row_fact = matched.groupby("_row_idx")["amount_in_location"].sum()
+
+                fact_values = []
+                for i in range(len(prod_raw)):
+                    cell_bc = str(prod_raw.iloc[i].get("cell_barcode", "")).strip()
+                    if cell_bc in scanned_set_full:
+                        fact_values.append(str(int(row_fact.get(i, 0))))
+                    else:
+                        fact_values.append("")
+
+                sh.update_single_column("products", "fact_scanned", fact_values)
+
             st.cache_data.clear()
             st.success(f"Загружено успешно! Новых ячеек: {len(new_cells - duplicate_cells)}, перезаписано: {len(duplicate_cells)}")
 

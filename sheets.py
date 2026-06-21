@@ -80,6 +80,24 @@ def bulk_write(worksheet_name: str, headers: list[str], rows: list[list], progre
             progress_cb(min(i + chunk, len(all_rows)), len(all_rows))
 
 
+def update_single_column(worksheet_name: str, col_name: str, values: list):
+    """Update (or add) a single column by name. values must match row count (excluding header)."""
+    spreadsheet = get_spreadsheet()
+    ws = spreadsheet.worksheet(worksheet_name)
+    headers = ws.row_values(1)
+
+    if col_name in headers:
+        col_idx = headers.index(col_name) + 1  # 1-based
+    else:
+        col_idx = len(headers) + 1
+        ws.update_cell(1, col_idx, col_name)
+
+    col_letter = gspread.utils.rowcol_to_a1(1, col_idx)[:-1]
+    # Build range: from row 2 to len(values)+1
+    cell_range = f"{col_letter}2:{col_letter}{len(values) + 1}"
+    ws.update(cell_range, [[v] for v in values], value_input_option="RAW")
+
+
 def get_existing_cells(worksheet_name: str = "scan_results") -> set:
     ws = get_spreadsheet().worksheet(worksheet_name)
     values = ws.col_values(1)
