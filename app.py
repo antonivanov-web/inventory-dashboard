@@ -202,12 +202,14 @@ if page == PAGES[0]:
         })
         outside_rack["Разница"] = outside_rack["Факт"] - outside_rack["План"]
 
-        csv_outside = outside_rack.to_csv(index=False).encode("utf-8-sig")
+        import io
+        buf = io.BytesIO()
+        outside_rack.to_excel(buf, index=False)
         st.download_button(
             "⬇️ Выгрузить расхождения вне стеллажа",
-            data=csv_outside,
-            file_name="discrepancies_outside_rack.csv",
-            mime="text/csv",
+            data=buf.getvalue(),
+            file_name="discrepancies_outside_rack.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     st.divider()
