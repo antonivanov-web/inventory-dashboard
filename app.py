@@ -403,11 +403,11 @@ elif page == PAGES[1]:
                 prod_exp2["cell_barcode"] = prod_exp2["cell_barcode"].astype(str).str.strip()
 
                 matched = prod_exp2.merge(
-                    fact_lookup.rename(columns={"barcode": "barcodes"}),
+                    fact_lookup.rename(columns={"barcode": "barcodes", "amount_in_location": "fact_qty"}),
                     on=["cell_barcode", "barcodes"], how="left"
                 )
-                matched["amount_in_location"] = matched["amount_in_location"].fillna(0)
-                row_fact = matched.groupby("_row_idx")["amount_in_location"].sum()
+                matched["fact_qty"] = matched["fact_qty"].fillna(0)
+                row_fact = matched.groupby("_row_idx")["fact_qty"].sum()
 
                 fact_values = []
                 for i in range(len(prod_raw)):
@@ -575,11 +575,11 @@ elif page == PAGES[2]:
         prod_exp_bf["cell_barcode"] = prod_exp_bf["cell_barcode"].astype(str).str.strip()
 
         matched_bf = prod_exp_bf.merge(
-            fact_lookup.rename(columns={"barcode": "barcodes"}),
+            fact_lookup.rename(columns={"barcode": "barcodes", "amount_in_location": "fact_qty"}),
             on=["cell_barcode", "barcodes"], how="left"
         )
-        matched_bf["amount_in_location"] = matched_bf["amount_in_location"].fillna(0)
-        row_fact_bf = matched_bf.groupby("_row_idx")["amount_in_location"].sum()
+        matched_bf["fact_qty"] = matched_bf["fact_qty"].fillna(0)
+        row_fact_bf = matched_bf.groupby("_row_idx")["fact_qty"].sum()
 
         fact_values_bf = []
         for i in range(len(prod_raw)):
